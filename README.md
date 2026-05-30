@@ -228,7 +228,7 @@ projeto-catraca/
 
 ## 👩‍💻 Autora
 
-Desenvolvido por **[Julyxdias](https://github.com/Julyxdias)** — Engenharia da Computação.
+Desenvolvido por **[Julyxdias](https://github.com/Julyxdias)** e Karol Helena — Engenharia da Computação.
 
 Orientação: Prof. André · Prof. Saulo
 
