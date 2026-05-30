@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reconhecimento Facial - Catraca</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.8.0"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+  <link rel="icon" href="Logotipo.png" type="image/png">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #667eea, #012e4c);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    #clock {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      padding: 15px 0;
+      background: rgba(0, 0, 0, 0.6);
+      color: #fff;
+      font-size: 2.5em;
+      text-align: center;
+      font-weight: bold;
+      z-index: 1000;
+      letter-spacing: 2px;
+      text-shadow: 2px 2px 5px rgba(0, 0, 0, 0.7);
+    }
+    footer {
+      position: fixed;
+      bottom: 10px;
+      width: 100%;
+      text-align: center;
+      color: #fff;
+      font-size: 0.9em;
+      background: rgba(0, 0, 0, 0.3);
+      padding: 10px 0;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+      color: #fff;
+    }
+    header .material-icons {
+      font-size: 80px;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.1); opacity: 0.7; }
+    }
+    header h1 {
+      font-size: 3em;
+      font-weight: 600;
+      margin-top: 10px;
+      letter-spacing: 1px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      overflow: hidden;
+      max-width: 700px;
+      width: 100%;
+      text-align: center;
+      transition: transform 0.3s;
+    }
+    .card:hover { transform: translateY(-8px); }
+    #webcam canvas {
+      width: 100% !important;
+      height: auto !important;
+      border-bottom: 2px solid #ffd500;
+    }
+    #label {
+      font-size: 1.8em;
+      padding: 20px;
+      font-weight: 600;
+      transition: background-color 0.3s, color 0.3s;
+    }
+    .status-autorizado {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .status-negado {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .status-esperando {
+      background-color: #fff3cd;
+      color: #856404;
+    }
+    .progress-bar {
+      width: 80%;
+      height: 10px;
+      background: #eee;
+      border-radius: 10px;
+      margin: 10px auto;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, #667eea, #012e4c);
+      border-radius: 10px;
+      transition: width 0.3s ease;
+    }
+    .btn-reload {
+      margin: 20px auto;
+      background: #ffd500;
+      color: #fff;
+      border: none;
+      padding: 15px 30px;
+      border-radius: 30px;
+      font-size: 1.2em;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .btn-reload:hover { background: #667eea; }
+  </style>
+</head>
+<body>
+
+  <div id="clock"></div>
+
+  <header>
+    <span class="material-icons">face_retouching_natural</span>
+    <h1>Reconhecimento Facial Alekson</h1>
+  </header>
+
+  <div class="card">
+    <div id="webcam"></div>
+    <p id="label" class="status-esperando">Solicitando acesso à câmera...</p>
+    <div class="progress-bar">
+      <div class="progress-bar-fill" id="progress"></div>
+    </div>
+    <button class="btn-reload" onclick="reiniciarCamera()">Reiniciar Câmera</button>
+  </div>
+
+  <footer>
+    &copy; 2025 Alekson Sistemas - Todos os direitos reservados.
+  </footer>
+
+  <script type="text/javascript">
+    const URL = "./meu-modelo/";
+    let model, webcam, maxPredictions;
+    let isRunning = false;
+    const idsAutorizadas = ["#1", "#2", "ID_003"];
+    const limiarProbabilidade = 0.99;
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+      .then(stream => {
+        stream.getTracks().forEach(track => track.stop());
+        init();
+      })
+      .catch(err => {
+        exibirErro("Erro ao acessar a câmera: " + err.message);
+      });
+
+    async function init() {
+      try {
+        const modelURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
+
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+
+        webcam = new tmImage.Webcam(600, 450, true);
+        await webcam.setup();
+        await webcam.play();
+        document.getElementById("webcam").appendChild(webcam.canvas);
+        
+        isRunning = true;
+        window.requestAnimationFrame(loop);
+      } catch (error) {
+        exibirErro("Erro ao carregar o modelo.");
+      }
+    }
+
+    async function loop() {
+      if (!isRunning) return;
+      webcam.update();
+      await predict();
+      window.requestAnimationFrame(loop);
+    }
+
+    async function predict() {
+      const prediction = await model.predict(webcam.canvas);
+      let melhorPredicao = null;
+      let maiorProb = 0;
+
+      for (let i = 0; i < prediction.length; i++) {
+        if (prediction[i].probability > maiorProb) {
+          maiorProb = prediction[i].probability;
+          melhorPredicao = prediction[i];
+        }
+      }
+
+      const label = document.getElementById("label");
+      const progress = document.getElementById("progress");
+      progress.style.width = Math.round(maiorProb * 100) + "%";
+
+      if (melhorPredicao && maiorProb > limiarProbabilidade) {
+        if (idsAutorizadas.includes(melhorPredicao.className)) {
+          label.innerText = `${melhorPredicao.className} - Acesso Liberado`;
+          label.className = "status-autorizado";
+          liberarCatraca();
+        } else {
+          label.innerText = "ID não autorizada!";
+          label.className = "status-negado";
+        }
+      } else {
+        label.innerText = "Procurando rosto...";
+        label.className = "status-esperando";
+      }
+    }
+
+    async function liberarCatraca() {
+      try {
+        await fetch("http://192.168.0.100/abrir", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "liberar" })
+        });
+        console.log("Comando enviado com sucesso!");
+      } catch (err) {
+        console.error("Erro ao liberar a catraca:", err);
+      }
+    }
+
+    function reiniciarCamera() {
+      if (webcam) {
+        isRunning = false;
+        webcam.stop();
+        document.getElementById("webcam").innerHTML = "";
+        init();
+      }
+    }
+
+    function exibirErro(msg) {
+      const label = document.getElementById("label");
+      label.innerText = msg;
+      label.className = "status-negado";
+    }
+
+    // Relógio
+    function atualizarRelogio() {
+      const agora = new Date();
+      const horas = String(agora.getHours()).padStart(2, '0');
+      const minutos = String(agora.getMinutes()).padStart(2, '0');
+      const segundos = String(agora.getSeconds()).padStart(2, '0');
+      document.getElementById('clock').textContent = `${horas}:${minutos}:${segundos}`;
+    }
+    setInterval(atualizarRelogio, 1000);
+    atualizarRelogio();
+  </script>
+
+</body>
+</html>
